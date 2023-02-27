@@ -7,7 +7,9 @@
 #include <Riostream.h>
 #include <TRandom.h>
 #include <TVector3.h>
+#include <TRotation.h>
 #include <TVector2.h>
+#include <TH1D.h>
 #include <TH1.h>
 #include <TH2.h>
 #include <TProfile.h>
@@ -18,11 +20,66 @@
 #include <TStyle.h>
 
 
+
+#include <Math/Vector3D.h>
+#include <Math/Vector2D.h>
+#include <Math/GenVector/Rotation3D.h>
+#include <Math/GenVector/RotationX.h>
+#include <Math/GenVector/RotationY.h>
+#include <Math/GenVector/RotationZ.h>
+
+#include "Math/Vector3D.h"
+#include "Math/Vector2D.h"
+#include "Math/GenVector/Rotation3D.h"
+#include "Math/GenVector/RotationX.h"
+#include "Math/GenVector/RotationY.h"
+#include "Math/GenVector/RotationZ.h"
+
+
+
+
+
+using namespace o2;
+using namespace o2::hmpid;
+
+#include <HMPIDBase/Param.h>
+//#include <HMPIDBase/>
+//using math_utils = o2::math_utils;
+//using Vector3D = o2::math_utils::Vector3D;
+ 
+//auto fParam = std::make_unique<o2::hmpid::Param>(o2::hmpid::Param::instance());
+//o2::hmpid::Param* fParam;
+
+
 // get Ring-radius from Cherenkov-angle
 double getRadiusFromCkov(double ckovAngle);
-Float_t GetFreonIndexOfRefraction(Float_t x);
-Float_t GetQuartzIndexOfRefraction(Float_t x);
-Double_t BackgroundFunc(Double_t *x, Double_t *par);
+double calcRingGeom(double ckovAng, int level);
+float GetFreonIndexOfRefraction(float x);
+float GetQuartzIndexOfRefraction(float x);
+double BackgroundFunc(double *x, double *par);
+
+
+
+
+/*
+void trs2Lors(o2::math_utils::Vector3D<double> dirCkov, double& thetaCer, double& phiCer) const;
+template <typename T = double> // typename
+const o2::math_utils::Vector2D<T> intWithEdge(o2::math_utils::Vector2D<T> p1, o2::math_utils::Vector2D<T> p2);
+
+
+template <typename T = double> // typename
+void propagate(const Polar3DVector& dir, o2::math_utils::Vector3D<double>& pos, double z) const;
+//template <typename T> // typename
+
+template <typename T = double> // typename
+o2::math_utils::Vector2D<T> tracePhot(double ckovThe, double ckovPhi) const;
+*/
+
+std::vector<double> photonCandidates;
+
+double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandidates, double fWindowWidth);
+
+
 
 const double defaultPhotonEnergy = 6.75; 
 const double refIndexFreon = GetFreonIndexOfRefraction(defaultPhotonEnergy);
@@ -38,18 +95,18 @@ const double  QuartzWindowWidth = 0.5;
 const double  EmissionLenght = RadiatorWidth/2;
   
 
-void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwidth)   
+void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, double Hwidth)   
 {
 
   const auto numberOfCkovPhotons = gRandom->Poisson(12);
 
-  Double_t ThetaP=0,PhiP=0,PhiF=0,DegThetaP=0,DegPhiP=0;
-  //Float_t /*RadiatorWidth,*/ QuartzWindowWidth,CH4GapWidth,EmissionLenght;
-  Float_t FreonIndexOfRefraction,QuartzIndexOfRefraction,CH4IndexOfRefraction;
-  Double_t ThetaF1,ThetaF2,ThetaF=0,ThetaLimite;
-  Float_t Xpi=0,Ypi=0,Xf=0,Yf=0,Xf1=0,Yf1=0,Xf2=0,Yf2=0,Xp=0,Yp=0; 
+  double ThetaP=0,PhiP=0,PhiF=0,DegThetaP=0,DegPhiP=0;
+  //float /*RadiatorWidth,*/ QuartzWindowWidth,CH4GapWidth,EmissionLenght;
+  float FreonIndexOfRefraction,QuartzIndexOfRefraction,CH4IndexOfRefraction;
+  double ThetaF1,ThetaF2,ThetaF=0,ThetaLimite;
+  float Xpi=0,Ypi=0,Xf=0,Yf=0,Xf1=0,Yf1=0,Xf2=0,Yf2=0,Xp=0,Yp=0; 
 
-  Float_t PhotonEnergy = 6.75; 
+  float PhotonEnergy = 6.75; 
   
   FreonIndexOfRefraction = GetFreonIndexOfRefraction(PhotonEnergy);
   QuartzIndexOfRefraction = GetQuartzIndexOfRefraction(PhotonEnergy);
@@ -81,19 +138,19 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
 
 
    
-  Float_t Deltax = (RadiatorWidth+QuartzWindowWidth+CH4GapWidth-EmissionLenght)*TMath::Tan(ThetaP)*TMath::Cos(PhiP);
-  Float_t Deltay = (RadiatorWidth+QuartzWindowWidth+CH4GapWidth-EmissionLenght)*TMath::Tan(ThetaP)*TMath::Sin(PhiP);
+  float Deltax = (RadiatorWidth+QuartzWindowWidth+CH4GapWidth-EmissionLenght)*TMath::Tan(ThetaP)*TMath::Cos(PhiP);
+  float Deltay = (RadiatorWidth+QuartzWindowWidth+CH4GapWidth-EmissionLenght)*TMath::Tan(ThetaP)*TMath::Sin(PhiP);
 	  
   Xpi = Xp - Deltax;
   Ypi = Yp - Deltay;
 	  
-  Float_t ThetaCherenkov[100000] = {0x0}, PhiCherenkov[100000] = {0x0}, DegPhiCherenkov[100000] = {0x0};
+  float ThetaCherenkov[100000] = {0x0}, PhiCherenkov[100000] = {0x0}, DegPhiCherenkov[100000] = {0x0};
     
   for(Int_t iEvt = 0; iEvt<NumberOfEvents; iEvt++){
     
-    Printf("event number = %i",iEvt);
+    //Printf("event number = %i",iEvt);
     
-    Float_t Xcen[100000],Ycen[100000];
+    float Xcen[100000],Ycen[100000];
      
     DegThetaP = 4.;//0.*(1 - 2*gRandom->Rndm(iEvt));
     DegPhiP   = 360*gRandom->Rndm(iEvt);
@@ -141,30 +198,30 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
       
       ThetaLimite = TMath::ASin(CH4IndexOfRefraction/QuartzIndexOfRefraction);
       
-      Double_t ThetaF0 = TMath::ASin(QuartzIndexOfRefraction/FreonIndexOfRefraction*TMath::Sin(ThetaLimite))-0.00001;
+      double ThetaF0 = TMath::ASin(QuartzIndexOfRefraction/FreonIndexOfRefraction*TMath::Sin(ThetaLimite))-0.00001;
 
 
       
     //  Printf("ThetaF0 = %f",ThetaF0*TMath::RadToDeg());
 	      
-      Double_t ThetaF01 = TMath::ASin((FreonIndexOfRefraction/QuartzIndexOfRefraction)*(TMath::Sin(ThetaF0)));      
+      double ThetaF01 = TMath::ASin((FreonIndexOfRefraction/QuartzIndexOfRefraction)*(TMath::Sin(ThetaF0)));      
       
-      Double_t ThetaF02 = TMath::ASin((QuartzIndexOfRefraction/CH4IndexOfRefraction)*(TMath::Sin(ThetaF01)));
+      double ThetaF02 = TMath::ASin((QuartzIndexOfRefraction/CH4IndexOfRefraction)*(TMath::Sin(ThetaF01)));
 	      
-      Float_t X01 = EmissionLenght*TMath::Tan(ThetaP)*TMath::Cos(PhiP);
+      float X01 = EmissionLenght*TMath::Tan(ThetaP)*TMath::Cos(PhiP);
 	      
-      Float_t Y01 =  EmissionLenght*TMath::Tan(ThetaP)*TMath::Sin(PhiP);
+      float Y01 =  EmissionLenght*TMath::Tan(ThetaP)*TMath::Sin(PhiP);
 	      
-      Float_t X02 = (RadiatorWidth - EmissionLenght)*TMath::Tan(ThetaF0)*TMath::Cos(PhiF)+QuartzWindowWidth*TMath::Tan(ThetaF01)*TMath::Cos(PhiF)+CH4GapWidth*TMath::Tan(ThetaF02)*TMath::Cos(PhiF);
+      float X02 = (RadiatorWidth - EmissionLenght)*TMath::Tan(ThetaF0)*TMath::Cos(PhiF)+QuartzWindowWidth*TMath::Tan(ThetaF01)*TMath::Cos(PhiF)+CH4GapWidth*TMath::Tan(ThetaF02)*TMath::Cos(PhiF);
 	      
-      Float_t Y02 = (RadiatorWidth - EmissionLenght)*TMath::Tan(ThetaF0)*TMath::Sin(PhiF) + QuartzWindowWidth*TMath::Tan(ThetaF01)*TMath::Sin(PhiF) + CH4GapWidth*TMath::Tan(ThetaF02)*TMath::Sin(PhiF);  
+      float Y02 = (RadiatorWidth - EmissionLenght)*TMath::Tan(ThetaF0)*TMath::Sin(PhiF) + QuartzWindowWidth*TMath::Tan(ThetaF01)*TMath::Sin(PhiF) + CH4GapWidth*TMath::Tan(ThetaF02)*TMath::Sin(PhiF);  
 	  
-      Float_t X0 = X01 + X02;
-      Float_t Y0 = Y01 + Y02;
+      float X0 = X01 + X02;
+      float Y0 = Y01 + Y02;
 	      
-      Double_t ThetaMin = 0;
-//      Double_t ThetaMax = 0.75+ThetaP;
-      Double_t ThetaMax = ThetaF0;
+      double ThetaMin = 0;
+//      double ThetaMax = 0.75+ThetaP;
+      double ThetaMax = ThetaF0;
 	      
       Xf = 999;
       Yf = 999;
@@ -176,7 +233,7 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
 	{ 
           nWhile++;
           
-	  ThetaF = (Double_t) (0.5*(ThetaMax - ThetaMin) + ThetaMin);
+	  ThetaF = (double) (0.5*(ThetaMax - ThetaMin) + ThetaMin);
 	  
 	  ThetaF1 = TMath::ASin((FreonIndexOfRefraction/QuartzIndexOfRefraction)*(TMath::Sin(ThetaF)));     
 	  
@@ -196,7 +253,7 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
 
 	  Xf = Xf1 + Xf2;
 	  Yf = Yf1 + Yf2;
-	  Printf("Positions Xf1 %f Yf1 %f Xf2 %f Yf2 %f" , Xf1, Yf1, Xf2, Yf2);
+	  //Printf("Positions Xf1 %f Yf1 %f Xf2 %f Yf2 %f" , Xf1, Yf1, Xf2, Yf2);
 		  
 
 
@@ -243,11 +300,14 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
 
       TVector2 v5(Xcen[n1]-Xp,Ycen[n1]-Yp);
       
-      //Double_t Phi = v5.Phi();
+      //double Phi = v5.Phi();
       
-      //Float_t DegPhi = 180*Phi/TMath::Pi(); 
+      //float DegPhi = 180*Phi/TMath::Pi(); 
       
       hTheta->Fill(ThetaCherenkov[n1]);
+
+      // add Actual Cherenkov Photon to Candidates
+      photonCandidates.emplace_back(ThetaCherenkov[n1]);
 	      	      
       //if(k1==2233) cout << " ThetaCherenkov " <<ThetaCherenkov[n1] <<"   PhiCherenkov = "<<DegPhiCherenkov[n1]<<"  event number = "<<k1<< endl;
 
@@ -273,14 +333,14 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
 	      
       HCS[k2] = NphotHough;
 	      
-      NHough->Fill(0.001*k2+0.001/2.,(Float_t)NphotHough);
+      NHough->Fill(0.001*k2+0.001/2.,(float)NphotHough);
 	      
    }
 	  
   Int_t LocPos = TMath::LocMax(700,HCS);
 	  
   Int_t NphotTot = 0;
-  Float_t MeanTot = 0;
+  float MeanTot = 0;
   
   for(Int_t p=0;p<NumberOfClusters;p++)
     {
@@ -294,7 +354,7 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
 	}
     }
 	    
-   Float_t RingThetaCherenkov = MeanTot/(Float_t)NphotTot;
+   float RingThetaCherenkov = MeanTot/(float)NphotTot;
 
    NPhoton->Fill(NphotTot);
    
@@ -360,7 +420,7 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
    
    double ckovAngle = gRandom->Gaus(0.5,0.012);		    // random CkovAngle
    double ringRadius = getRadiusFromCkov(ckovAngle); // R in photon-map
-						
+   Printf("Cherenkov Photon : Angle = %f Radius = %f", ckovAngle, ringRadius);	
 
    double alpha = static_cast<double>((3.14159)*(1-2*gRandom->Rndm(1)));    // angle in photon-map (-pi to pi)
 
@@ -371,6 +431,10 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
 
    signalMap->Fill(x,y);//signalMap noiseMap hSignalAndNoiseMap
    hSignalAndNoiseMap->Fill(x,y);
+
+
+   // add Actual Cherenkov Photon to Candidates
+   photonCandidates.emplace_back(ckovAngle);
 
    hTheta2->Fill(ckovAngle);
    hThetawg->Fill(ckovAngle);
@@ -386,13 +450,23 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
    
   // if(hTheta->GetBinContent(bin)==0) bin=bin+1;
    
-   Double_t weight = 1 - fBackGround->Eval(ThetaCherenkov[n2])/hTheta->GetBinContent(bin);
+   double weight = 1 - fBackGround->Eval(ThetaCherenkov[n2])/hTheta->GetBinContent(bin);
 
    hTheta2->Fill(ThetaCherenkov[n2]);
     
    hThetawg->Fill(ThetaCherenkov[n2],weight);
+
+
+   
+
+
  }
- 
+
+ Printf("Total Number of photonCandidates = %zu", photonCandidates.size()); 
+ Printf("Total Number of Background Clusters = %i", NumberOfClusters); 
+ Printf("Hough Window size = %f", Hwidth); 
+ houghResponse(photonCandidates,  Hwidth);
+
 
  TCanvas *signalCanvas = new TCanvas("SignalMap","SignalMap", 800, 800);
  signalCanvas->Divide(2,1);
@@ -483,26 +557,26 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
  
 }
 //**********************************************************************************************************************************************************************************************************
-Float_t GetFreonIndexOfRefraction(Float_t x)
+float GetFreonIndexOfRefraction(float x)
   
 {
-  Float_t k = 1.177 + (0.0172)*x;
+  float k = 1.177 + (0.0172)*x;
   return k;
 }
 //**********************************************************************************************************************************************************************************************************
-Float_t GetQuartzIndexOfRefraction(Float_t x)
+float GetQuartzIndexOfRefraction(float x)
   
 {
-  Float_t k = TMath::Sqrt(1 + 46.411/(113.763556 - x) + 228.71/(328.51563 - x));
+  float k = TMath::Sqrt(1 + 46.411/(113.763556 - x) + 228.71/(328.51563 - x));
   return k;
 }
 
 //*********************************************************************************************************************************************************************************************************
-Double_t BackgroundFunc(Double_t *x, Double_t *par)
+double BackgroundFunc(double *x, double *par)
 {
- Double_t xx = x[0];
+ double xx = x[0];
   
- Double_t f = par[0]*TMath::Tan(TMath::ASin(1.2903*TMath::Sin(xx)))*(1+TMath::Tan(TMath::ASin(1.2903*TMath::Sin(xx)))*TMath::Tan(TMath::ASin(1.2903*TMath::Sin(xx)))*1.2903*TMath::Cos(xx)/cos(asin(1.2903*TMath::Sin(xx))));
+ double f = par[0]*TMath::Tan(TMath::ASin(1.2903*TMath::Sin(xx)))*(1+TMath::Tan(TMath::ASin(1.2903*TMath::Sin(xx)))*TMath::Tan(TMath::ASin(1.2903*TMath::Sin(xx)))*1.2903*TMath::Cos(xx)/cos(asin(1.2903*TMath::Sin(xx))));
   
  return f;
 }       
@@ -524,4 +598,293 @@ double getRadiusFromCkov(double ckovAngle)
   double R = static_cast<double>(R_ckov + R_qz + R_0);
   return R;
 } 
+
+
+/*
+*/
+
+double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandidates, double fWindowWidth)
+{
+
+  const double fDTheta = 0.001;  // increment
+  double kThetaMax = 0.75;
+  int nChannels = (int)(kThetaMax / fDTheta + 0.5);
+
+  // ef : change to smart-pointer
+
+  std::unique_ptr<TH1D> phots, photsw, resultw;
+  phots.reset(new TH1D("Rphot", "phots", nChannels, 0, kThetaMax));
+  photsw.reset(new TH1D("RphotWeighted", "photsw", nChannels, 0, kThetaMax));
+  resultw.reset(new TH1D("resultw", "resultw", nChannels, 0, kThetaMax));
+
+  /* ef : changed from this:
+  // TH1D *resultw = new TH1D("resultw","resultw"       ,nChannels,0,kThetaMax);
+  // TH1D *phots   = new TH1D("Rphot"  ,"phots"         ,nChannels,0,kThetaMax);
+  // TH1D *photsw  = new TH1D("RphotWeighted" ,"photsw" ,nChannels,0,kThetaMax); */
+
+  int nBin = (int)(kThetaMax / fDTheta);
+  int nCorrBand = (int)(fWindowWidth / (2 * fDTheta));
+
+  for (const auto& angle : photonCandidates) { // photon cadidates loop
+
+    if (angle < 0 || angle > kThetaMax)
+      continue;
+
+
+    phots->Fill(angle);
+    Printf("HoughResponse Fill histogram phots : angle = %f", angle);
+    int bin = (int)(0.5 + angle / (fDTheta));
+    double weight = 1.;
+    if (true) {
+      double lowerlimit = ((double)bin) * fDTheta - 0.5 * fDTheta;
+      double upperlimit = ((double)bin) * fDTheta + 0.5 * fDTheta;
+
+      double areaLow =  getRadiusFromCkov(lowerlimit);// calcRingGeom(lowerlimit, 2);
+      double areaHigh = getRadiusFromCkov(upperlimit);
+
+      double diffArea = areaHigh - areaLow;
+      if (diffArea > 0)
+        weight = 1. / diffArea;
+    }
+    Printf("angle %f ; weight %f ", angle, weight);
+    photsw->Fill(angle, weight);
+    Printf("HoughResponse Fill histogram photsw angle : %f weight : %f" , angle, weight);
+    //fPhotWei.emplace_back(weight); ef: do i need this?
+  } // photon candidates loop
+
+  for (int i = 1; i <= nBin; i++) {
+    int bin1 = i - nCorrBand;
+    int bin2 = i + nCorrBand;
+    if (bin1 < 1)
+      bin1 = 1;
+    if (bin2 > nBin)
+      bin2 = nBin;
+    double sumPhots = phots->Integral(bin1, bin2);
+
+    Printf("bin1 %d ; bin2 %d; sumPhots %f ", bin1, bin2, sumPhots);
+    if (sumPhots < 3)
+      continue; // if less then 3 photons don't trust to this ring
+    double sumPhotsw = photsw->Integral(bin1, bin2);
+    Printf("sumPhotsw %f  ",sumPhotsw);
+    if ((double)((i + 0.5) * fDTheta) > 0.7)
+      continue;
+
+    Printf("HoughResponse Fill histogram resultw bin %f sumPhotsw %f ", (double)((i + 0.5) * fDTheta),sumPhotsw);
+    resultw->Fill((double)((i + 0.5) * fDTheta), sumPhotsw);
+  }
+  // evaluate the "BEST" theta ckov as the maximum value of histogramm
+
+  // ef : get() method should not be used to create new pointers for raw-pointers from smart-pointers,
+  // does this apply to the GetArray-method too?
+  double* pVec = resultw->GetArray();
+  int locMax = TMath::LocMax(nBin, pVec);
+
+     Printf("photsw %f phots %d", *pVec, locMax);
+//photsw
+  Printf("Entries : resultw %f photsw %f phots %f", resultw->GetEntries(), photsw->GetEntries(), phots->GetEntries());
+  Printf("Max resultw %f photsw %f phots %f",  resultw->GetMaximum(10000.), photsw->GetMaximum(10000.), phots->GetMaximum(10000.));
+  Printf("Min resultw %f photsw %f phots %f",  resultw->GetMinimum(-1.), photsw->GetMinimum(-1.), phots->GetMinimum(-1.));
+
+  // ef: not this method, raw-pointers should not be used with new/delete-keywords
+  //     smart-pointers are deleted when the fcuntion exits scope :
+  // delete phots;delete photsw;delete resultw; // Reset and delete objects
+  
+
+  TCanvas *houghCanvas = new TCanvas("Hough Canvas","Hough Canvas", 800, 800);
+  houghCanvas->Divide(2,2);
+  houghCanvas->cd(1);
+  phots->Draw();
+
+  houghCanvas->cd(2);
+  photsw->Draw();
+
+  houghCanvas->cd(3);
+  resultw->Draw();
+
+  houghCanvas->Show();
+  houghCanvas->SaveAs("houghCanvas.png");
+
+
+  TCanvas *photsCanvas = new TCanvas("photss","photss", 800, 800);
+  photsCanvas->cd(1);
+  phots->Draw();
+  resultwCanvas->SaveAs("phots.png");
+
+  TCanvas *photswCanvas = new TCanvas("photsw","photsw", 800, 800);
+  photswCanvas->cd(1);
+  photsw->Draw();
+  resultwCanvas->SaveAs("photsw.png");
+
+  TCanvas *resultwCanvas = new TCanvas("resultw","resultw", 800, 800);
+  resultwCanvas->cd(1);
+  resultw->Draw();
+  resultwCanvas->SaveAs("resultw.png");
+
+  return static_cast<double>(locMax * fDTheta + 0.5 * fDTheta); // final most probable track theta ckov
+  // 
+}
+
+
+
+/*
+double calcRingGeom(double ckovAng, int level)
+{
+  // Find area covered in the PC acceptance
+  // Arguments: ckovAng - cerenkov angle
+  //            level   - precision in finding area and portion of ring accepted (multiple of 50)
+  //   Returns: area of the ring in cm^2 for given theta ckov
+
+  int kN = 50 * level;
+  int nPoints = 0;
+  double area = 0;
+
+  bool first = kFALSE;
+
+  // this needs to be changed?
+  // TVector2
+  o2::math_utils::Vector2D<double> pos1;
+
+  for (int i = 0; i < kN; i++) {
+    if (!first) {
+      pos1 = o2::hmpid::Recon::tracePhot(ckovAng, double(TMath::TwoPi() * (i + 1) / kN)); // find a good trace for the first photon
+      if (pos1.X() == -999)
+        continue; // no area: open ring
+
+      if (!fParam->isInside(pos1.X(), pos1.Y(), 0)) {
+        pos1 = o2::hmpid::Recon::intWithEdge(fMipPos, pos1); // find the very first intersection...
+      } else {
+        if (!Param::isInDead(1.0f, 1.0f)) // ef : moved method from Param.cxx to h
+          nPoints++;                      // photon is accepted if not in dead zone
+      }
+      first = kTRUE;
+      continue;
+    }
+    o2::math_utils::Vector2D<double> pos2 = o2::hmpid::Recon::tracePhot(ckovAng, double(TMath::TwoPi() * (i + 1) / kN)); // trace the next photon
+    if (pos2.X() == -999)
+      continue; // no area: open ring
+    if (!fParam->isInside(pos2.X(), pos2.Y(), 0)) {
+      pos2 = o2::hmpid::Recon::intWithEdge(fMipPos, pos2);
+    } else {
+      if (!Param::isInDead(pos2.X(), pos2.Y()))
+        nPoints++; // photon is accepted if not in dead zone
+    }
+
+    area += TMath::Abs((pos1 - fMipPos).X() * (pos2 - fMipPos).Y() - (pos1 - fMipPos).Y() * (pos2 - fMipPos).X()); // add area of the triangle...
+    pos1 = pos2;
+  }
+  //---  find area and length of the ring;
+  fRingAcc = (double)nPoints / (double)kN;
+  area *= 0.5;
+  fRingArea = area;
+  return fRingArea;
+} // FindRingGeom()
+
+
+void trs2Lors(o2::math_utils::Vector3D<double> dirCkov, double& thetaCer, double& phiCer) const
+{
+  // Theta Cerenkov reconstruction
+  //  Arguments: dirCkov photon vector in TRS
+  //    Returns: thetaCer of photon in LORS
+  //               phiCer of photon in LORS
+
+  // TRotation mtheta;
+  // mtheta.RotateY(fTrkDir.Theta()); ef : changed to :
+
+  ROOT::Math::Rotation3D mtheta(ROOT::Math::RotationY(fTrkDir.Theta()));
+
+  // TRotation mphi;
+  // mphi.RotateZ(fTrkDir.Phi()); ef : changed to :
+
+  ROOT::Math::Rotation3D mphi(ROOT::Math::RotationZ(fTrkDir.Phi()));
+
+  ROOT::Math::Rotation3D mrot = mphi * mtheta;
+
+  // ef : TVector3->Polar3D
+  o2::math_utils::Vector3D<double> dirCkovLORS;
+  dirCkovLORS = mrot * dirCkov;
+  phiCer = dirCkovLORS.Phi();     // actual value of the phi of the photon
+  thetaCer = dirCkovLORS.Theta(); // actual value of thetaCerenkov of the photon
+}
+
+
+
+template <typename T> // typename
+o2::math_utils::Vector2D<T> tracePhot(double ckovThe, double ckovPhi) const
+{
+  // Trace a single Ckov photon from emission point somewhere in radiator up to photocathode taking into account ref indexes of materials it travereses
+  // Arguments: ckovThe,ckovPhi- photon ckov angles in TRS, [rad]
+  //   Returns: distance between photon point on PC and track projection
+
+  double theta, phi;
+  o2::math_utils::Vector3D<double> dirTRS; // ef TVector3 -> Polar3D
+
+  Polar3DVector dirLORS;
+
+  // ef SetMagThetaPhi->SetCoordinates
+
+  dirTRS.SetCoordinates(1, ckovThe, ckovPhi); // photon in TRS
+  trs2Lors(dirTRS, theta, phi);
+  dirLORS.SetCoordinates(1, theta, phi); // photon in LORS
+  return traceForward(dirLORS);          // now foward tracing
+} // TracePhot()
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+template <typename T>
+void propagate(const Polar3DVector& dir, o2::math_utils::Vector3D<double>& pos, double z) const
+{
+  // Finds an intersection point between a line and XY plane shifted along Z.
+  // Arguments:  dir,pos   - vector along the line and any point of the line
+  //             z         - z coordinate of plain
+  //   Returns:  none
+  //   On exit:  pos is the position if this intesection if any
+  static o2::math_utils::Vector3D<double> nrm(0, 0, 1);
+  o2::math_utils::Vector3D<double> pnt(0, 0, z);
+
+  o2::math_utils::Vector3D<double> diff = pnt - pos;
+  double sint = 0; //(nrm * diff) / (nrm * dir);
+  pos += sint * dir;
+} // Propagate()
+
+
+template <typename T>
+const o2::math_utils::Vector2D<T> intWithEdge(o2::math_utils::Vector2D<T> p1, o2::math_utils::Vector2D<T> p2)
+{
+  // It finds the intersection of the line for 2 points traced as photons
+  // and the edge of a given PC
+  // Arguments: 2 points obtained tracing the photons
+  //   Returns: intersection point with detector (PC) edges
+
+  double xmin = (p1.X() < p2.X()) ? p1.X() : p2.X();
+  double xmax = (p1.X() < p2.X()) ? p2.X() : p1.X();
+  double ymin = (p1.Y() < p2.Y()) ? p1.Y() : p2.Y();
+  double ymax = (p1.Y() < p2.Y()) ? p2.Y() : p1.Y();
+
+  double m = TMath::Tan((p2 - p1).Phi());
+  o2::math_utils::Vector2D<double> pint;
+  // intersection with low  X
+  pint.SetCoordinates((double)(p1.X() + (0 - p1.Y()) / m), 0.);
+  if (pint.X() >= 0 && pint.X() <= fParam->sizeAllX() &&
+      pint.X() >= xmin && pint.X() <= xmax &&
+      pint.Y() >= ymin && pint.Y() <= ymax)
+    return pint;
+  // intersection with high X
+  pint.SetCoordinates((double)(p1.X() + (fParam->sizeAllY() - p1.Y()) / m), (double)(fParam->sizeAllY()));
+  if (pint.X() >= 0 && pint.X() <= fParam->sizeAllX() &&
+      pint.X() >= xmin && pint.X() <= xmax &&
+      pint.Y() >= ymin && pint.Y() <= ymax)
+    return pint;
+  // intersection with left Y
+  pint.SetCoordinates(0., (double)(p1.Y() + m * (0 - p1.X())));
+  if (pint.Y() >= 0 && pint.Y() <= fParam->sizeAllY() &&
+      pint.Y() >= ymin && pint.Y() <= ymax &&
+      pint.X() >= xmin && pint.X() <= xmax)
+    return pint;
+  // intersection with righ Y
+  pint.SetCoordinates((double)(fParam->sizeAllX()), (double)(p1.Y() + m * (fParam->sizeAllX() - p1.X()))); // ef: Set->SetCoordinates
+  if (pint.Y() >= 0 && pint.Y() <= fParam->sizeAllY() &&
+      pint.Y() >= ymin && pint.Y() <= ymax &&
+      pint.X() >= xmin && pint.X() <= xmax)
+    return pint;
+  return p1;
+} // IntWithEdge()v */
 

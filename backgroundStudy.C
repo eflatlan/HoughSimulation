@@ -16,14 +16,35 @@
 #include <TNtuple.h>
 #include <TFile.h>
 #include <TStyle.h>
+
+
+// get Ring-radius from Cherenkov-angle
+double getRadiusFromCkov(double ckovAngle);
 Float_t GetFreonIndexOfRefraction(Float_t x);
 Float_t GetQuartzIndexOfRefraction(Float_t x);
 Double_t BackgroundFunc(Double_t *x, Double_t *par);
 
+const double defaultPhotonEnergy = 6.75; 
+const double refIndexFreon = GetFreonIndexOfRefraction(defaultPhotonEnergy);
+const double refIndexQuartz = GetQuartzIndexOfRefraction(defaultPhotonEnergy);
+const double  refIndexCH4 = 1.00; 
+
+
+
+
+const double CH4GapWidth = 8;
+const double  RadiatorWidth = 1.;
+const double  QuartzWindowWidth = 0.5;
+const double  EmissionLenght = RadiatorWidth/2;
+  
+
 void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwidth)   
 {
+
+  const auto numberOfCkovPhotons = gRandom->Poisson(12);
+
   Double_t ThetaP=0,PhiP=0,PhiF=0,DegThetaP=0,DegPhiP=0;
-  Float_t RadiatorWidth,QuartzWindowWidth,CH4GapWidth,EmissionLenght;
+  //Float_t /*RadiatorWidth,*/ QuartzWindowWidth,CH4GapWidth,EmissionLenght;
   Float_t FreonIndexOfRefraction,QuartzIndexOfRefraction,CH4IndexOfRefraction;
   Double_t ThetaF1,ThetaF2,ThetaF=0,ThetaLimite;
   Float_t Xpi=0,Ypi=0,Xf=0,Yf=0,Xf1=0,Yf1=0,Xf2=0,Yf2=0,Xp=0,Yp=0; 
@@ -34,11 +55,7 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
   QuartzIndexOfRefraction = GetQuartzIndexOfRefraction(PhotonEnergy);
   CH4IndexOfRefraction = 1.00;
   
-  CH4GapWidth = 8;
-  RadiatorWidth = 1.;
-  QuartzWindowWidth = 0.5;
-  EmissionLenght = RadiatorWidth/2;
-  
+
   TH1F *ThetaHough = new TH1F("ThetaHough","ThetaHough",1000,0,1);
   TH1F *NPhoton    = new TH1F("NPhoton","NPhoton",20,0.,20.); 
   TH1F *NHough     = new TH1F("NHuogh","NHough",1000,0.,1.); 
@@ -51,16 +68,17 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
   TH1F *hThetaRing = new TH1F("hThetaRing","Ring Cherenkov; Cherenkov Angle [rad];",1000,0.,1.);
 
   TH2F *hClusterMap = new TH2F("Cluster Map", "Cluster Map; x [Pads]; y [Pads]",1000,-10.,10.,1000,-10.,10.);
-  TH2F *hClusterMap2 = new TH2F("Cluster Map2", "Cluster Map2; x [Pads]; y [Pads]",1000,-25.,25.,1000,-25.,25.);
+  TH2F *hSignalAndNoiseMap = new TH2F("Cluster Map2", "Cluster Map2; x [Pads]; y [Pads]",1000,-25.,25.,1000,-25.,25.);
 
   TH2F *hphotonMap = new TH2F("Photon Map","Photon Map; x [Pads]; y [Pads]",1000,-10.,10.,1000,-10.,10.);
 
 
+
+
   TH2F *hphotonMap2 = new TH2F("Photon Map2","Photon Map2; x [Pads]; y [Pads]",1000,-25.,25.,1000,-25.,25.);
+  TH2F *signalMap = new TH2F("signalHitMap","signalHitMap",1000,0.,-30.,1000,0.,30.);
+  TH2F *noiseMap = new TH2F("noiseHitMap","noiseHitMap",1000,0.,-30.,1000,0.,30.);
 
-
-  TH2F *signalMap = new TH2F("signalHitMap","signalHitMap",1000,0.,1.,1000,0.,1.);
-  TH2F *noiseMap = new TH2F("noiseHitMap","noiseHitMap",1000,0.,1.,1000,0.,1.);
 
    
   Float_t Deltax = (RadiatorWidth+QuartzWindowWidth+CH4GapWidth-EmissionLenght)*TMath::Tan(ThetaP)*TMath::Cos(PhiP);
@@ -87,22 +105,45 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
       
     //  Printf("cluster = %i",n1);
       
-      Xcen[n1] = 18*(1 - 2*gRandom->Rndm(n1));
-      Ycen[n1] = 18*(1 - 2*gRandom->Rndm(n1)); 
-      hClusterMap->Fill(Xcen[n1], Ycen[n1]);
-      hClusterMap2->Fill(Xcen[n1], Ycen[n1]);
-      
+      Xcen[n1] = 60*(1 - 2*gRandom->Rndm(n1));
+      Ycen[n1] = 60*(1 - 2*gRandom->Rndm(n1));
+      hphotonMap->Fill(Xcen[n1], Ycen[n1]);
+      hphotonMap2->Fill(Xcen[n1], Ycen[n1]);
+
+
+
+      noiseMap->Fill(Xcen[n1], Ycen[n1]);
+      hSignalAndNoiseMap->Fill(Xcen[n1], Ycen[n1]);
             
 
 //      Xcen[n1] = 130*gRandom->Rndm(n1); Ycen[n1] = 130*gRandom->Rndm(n1); 
       
       TVector3 v2(Xcen[n1]-Xpi-EmissionLenght*TMath::Tan(ThetaP)*TMath::Cos(PhiP),Ycen[n1]-Ypi-EmissionLenght*TMath::Tan(ThetaP)*TMath::Sin(PhiP),RadiatorWidth+QuartzWindowWidth+CH4GapWidth-EmissionLenght); 
       
-      PhiF = v2.Phi();      
+      PhiF = v2.Phi();     
+
+
+
+     // R_ckov = sin (theta_ckov)*(RadiatorWidth - EmissionLenght)
+     // R_qz = sin(theta_qz) * QuartzWindowWidth
+     // R_0 = sin(theta_0)*CH4GapWidth
+     
+	
+
+
+
+
+     //theta_qz = TMath::Asin(sin_ckov*n_GAP/n_quartz);
+
+     // sin_ckov * n_Radiator = sin_qz * n_quartz
+     // sin_qz * n_quartz = sin_theta0 * n_GAP
+       
       
       ThetaLimite = TMath::ASin(CH4IndexOfRefraction/QuartzIndexOfRefraction);
       
       Double_t ThetaF0 = TMath::ASin(QuartzIndexOfRefraction/FreonIndexOfRefraction*TMath::Sin(ThetaLimite))-0.00001;
+
+
       
     //  Printf("ThetaF0 = %f",ThetaF0*TMath::RadToDeg());
 	      
@@ -150,13 +191,14 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
 		  
 	  Yf2 = (RadiatorWidth - EmissionLenght)*TMath::Tan(ThetaF)*TMath::Sin(PhiF) + QuartzWindowWidth*TMath::Tan(ThetaF1)*TMath::Sin(PhiF) + CH4GapWidth*TMath::Tan(ThetaF2)*TMath::Sin(PhiF);  
 		  
+
+	 
+
 	  Xf = Xf1 + Xf2;
 	  Yf = Yf1 + Yf2;
 	  Printf("Positions Xf1 %f Yf1 %f Xf2 %f Yf2 %f" , Xf1, Yf1, Xf2, Yf2);
 		  
 
-	  hphotonMap->Fill(Xf, Yf);
-	  hphotonMap2->Fill(Xf, Yf);
 
 	  if(TMath::Sqrt((Xf-X0)*(Xf-X0)+(Yf-Y0)*(Yf-Y0))>TMath::Sqrt((Xcen[n1]-Xpi-X0)*(Xcen[n1]-Xpi-X0)+(Ycen[n1]-Ypi-Y0)*(Ycen[n1]-Ypi-Y0)))
 		    
@@ -258,9 +300,11 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
    
    if(NphotTot<3) continue;
    
-   hThetaRing->Fill(RingThetaCherenkov);
+   hThetaRing->Fill(RingThetaCherenkov); // gjor denne på weighted m signal
         
  }// events loop
+
+ // endre weight til fra Recon fra Giacomo sin branch
 
  TF1 *fBackGround = new TF1("fBackGround",BackgroundFunc,0,0.75,1);
  
@@ -295,9 +339,14 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
  hClusterMap->Draw();
 
  clusterCanvas2->cd(2);
- hClusterMap2->Draw();
+ hSignalAndNoiseMap->Draw();
 
  
+
+
+
+//signalMap noiseMap hSignalAndNoiseMap
+
 
  TCanvas *c4 = new TCanvas("c4","c4",600,400);
  
@@ -307,12 +356,24 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
  
  Printf("par0 = %f",fBackGround->GetParameter(0));
  
- for(Int_t i=0; i<5000; i++) {
+ for(Int_t i=0; i < numberOfCkovPhotons; i++) {
    
-   Double_t gaus = gRandom->Gaus(0.5,0.012);
-   
-   hTheta2->Fill(gaus);
-   hThetawg->Fill(gaus);
+   double ckovAngle = gRandom->Gaus(0.5,0.012);		    // random CkovAngle
+   double ringRadius = getRadiusFromCkov(ckovAngle); // R in photon-map
+						
+
+   double alpha = static_cast<double>((3.14159)*(1-2*gRandom->Rndm(1)));    // angle in photon-map (-pi to pi)
+
+   // get x and y values of Photon-candidate:
+   double x = static_cast<double>(TMath::Cos(alpha)*ringRadius);
+   double y = static_cast<double>(TMath::Sin(alpha)*ringRadius);  
+
+
+   signalMap->Fill(x,y);//signalMap noiseMap hSignalAndNoiseMap
+   hSignalAndNoiseMap->Fill(x,y);
+
+   hTheta2->Fill(ckovAngle);
+   hThetawg->Fill(ckovAngle);
   } 
  
  for(Int_t n2=0;n2<NumberOfClusters; n2++) {
@@ -332,6 +393,24 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, Double_t Hwid
    hThetawg->Fill(ThetaCherenkov[n2],weight);
  }
  
+
+ TCanvas *signalCanvas = new TCanvas("SignalMap","SignalMap", 800, 800);
+ signalCanvas->Divide(2,1);
+ signalCanvas->cd(1);
+ signalMap->Draw();
+
+ TCanvas *noiseCanvas = new TCanvas("Noise Map","Noise Map", 800, 800);
+ noiseCanvas->Divide(2,1);
+ noiseCanvas->cd(1);
+ noiseMap->Draw();
+
+ TCanvas *signalNoiseCanvas = new TCanvas("Signal and Noise Map","Signal and Noise Map", 800, 800);
+ signalNoiseCanvas->Divide(2,1);
+ signalNoiseCanvas->cd(1);
+ hSignalAndNoiseMap->Draw();
+
+
+
  c2->cd();
  hTheta2->Draw(); 
  
@@ -428,3 +507,21 @@ Double_t BackgroundFunc(Double_t *x, Double_t *par)
  return f;
 }       
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+// get Ring-radius from Cherenkov-angle
+double getRadiusFromCkov(double ckovAngle)
+{
+
+  //// refIndexFreon refIndexQuartz refIndexCH4
+  double sin_ckov = static_cast<double>(TMath::Sin(ckovAngle));
+  double sin_qz = static_cast<double>(sin_ckov*(refIndexFreon/refIndexQuartz));
+  double sin_theta0 = static_cast<double>(sin_qz*(refIndexQuartz/refIndexCH4));
+
+  double R_ckov = sin_ckov*(RadiatorWidth - EmissionLenght);
+  double R_qz = sin_qz * QuartzWindowWidth;
+  double R_0 = sin_theta0*CH4GapWidth;
+  double R = static_cast<double>(R_ckov + R_qz + R_0);
+  return R;
+} 
+

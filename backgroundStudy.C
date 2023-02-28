@@ -2,6 +2,7 @@
 #include <TROOT.h>
 #include <TMath.h>
 #include <TCanvas.h>
+#include <TLatex.h>
 #include <TPad.h>
 #include <TH2F.h>
 #include <Riostream.h>
@@ -43,12 +44,6 @@ using namespace o2;
 using namespace o2::hmpid;
 
 #include <HMPIDBase/Param.h>
-//#include <HMPIDBase/>
-//using math_utils = o2::math_utils;
-//using Vector3D = o2::math_utils::Vector3D;
- 
-//auto fParam = std::make_unique<o2::hmpid::Param>(o2::hmpid::Param::instance());
-//o2::hmpid::Param* fParam;
 
 
 // get Ring-radius from Cherenkov-angle
@@ -58,22 +53,21 @@ float GetFreonIndexOfRefraction(float x);
 float GetQuartzIndexOfRefraction(float x);
 double BackgroundFunc(double *x, double *par);
 
+const double fDTheta = 0.001;  // increment
+double kThetaMax = 0.75;
+int nChannels = (int)(kThetaMax / fDTheta + 0.5);
 
 
-
-/*
-void trs2Lors(o2::math_utils::Vector3D<double> dirCkov, double& thetaCer, double& phiCer) const;
-template <typename T = double> // typename
-const o2::math_utils::Vector2D<T> intWithEdge(o2::math_utils::Vector2D<T> p1, o2::math_utils::Vector2D<T> p2);
+void setStyle();
 
 
-template <typename T = double> // typename
-void propagate(const Polar3DVector& dir, o2::math_utils::Vector3D<double>& pos, double z) const;
-//template <typename T> // typename
+auto phots = new TH1D("Photon Candidates", "Photon Candidates;angle [rad]; counts/1 mrad", nChannels, 0, kThetaMax);
+auto photsw = new TH1D("Photon Weights", "Photon Weights;angle [rad]; counts/1 mrad", nChannels, 0, kThetaMax);
+auto resultw = new TH1D("Sliding Windows", "Sliding Window;angle [rad]; counts/1 mrad", nChannels, 0, kThetaMax);
+TH1F *hTheta     = new TH1F("Background","Background; angle [rad]; counts/1 mrad",750,0.,0.75); 
 
-template <typename T = double> // typename
-o2::math_utils::Vector2D<T> tracePhot(double ckovThe, double ckovPhi) const;
-*/
+double meanCherenkovAngle;
+
 
 std::vector<double> photonCandidates;
 
@@ -98,7 +92,7 @@ const double  EmissionLenght = RadiatorWidth/2;
 void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, double Hwidth)   
 {
 
-  const auto numberOfCkovPhotons = gRandom->Poisson(12);
+  const auto numberOfCkovPhotons = /*gRandom->Poisson*/(11);
 
   double ThetaP=0,PhiP=0,PhiF=0,DegThetaP=0,DegPhiP=0;
   //float /*RadiatorWidth,*/ QuartzWindowWidth,CH4GapWidth,EmissionLenght;
@@ -117,26 +111,34 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, double Hwidth
   TH1F *NPhoton    = new TH1F("NPhoton","NPhoton",20,0.,20.); 
   TH1F *NHough     = new TH1F("NHuogh","NHough",1000,0.,1.); 
 
-  TH1F *hTheta     = new TH1F("Background","Background; angle [rad]; counts/1 mrad",750,0.,0.75);
+  setStyle();
 
 
   TH1F *hTheta2    = new TH1F("Photon Cherenkov Angle Distribution","Photon Cherenkov Angle Distribution;angle [rad]; counts/1 mrad",750,0.,0.75);
   TH1F *hThetawg   = new TH1F("Track Cherenkov Angle Distribution","Track Cherenkov Angle Distribution;angle [rad]; counts/1 mrad",750,0.,0.75);
   TH1F *hThetaRing = new TH1F("hThetaRing","Ring Cherenkov; Cherenkov Angle [rad];",1000,0.,1.);
 
-  TH2F *hClusterMap = new TH2F("Cluster Map", "Cluster Map; x [Pads]; y [Pads]",1000,-10.,10.,1000,-10.,10.);
-  TH2F *hSignalAndNoiseMap = new TH2F("Cluster Map2", "Cluster Map2; x [Pads]; y [Pads]",1000,-25.,25.,1000,-25.,25.);
-
-  TH2F *hphotonMap = new TH2F("Photon Map","Photon Map; x [Pads]; y [Pads]",1000,-10.,10.,1000,-10.,10.);
+  TH2F *hClusterMap = new TH2F("Cluster Map", "Cluster Map; x [cm]; y [cm]",1000,-10.,10.,1000,-10.,10.);
 
 
+  TH2F *hSignalAndNoiseMap = new TH2F("Signal and Noise ", "Signal and Noise ; x [cm]; y [cm]",1000,-25.,25.,1000,-25.,25.);
+
+TH2F *hSignalAndNoiseMap2 = new TH2F("Signal and Noise 2", "Signal and Noise 2; x [cm]; y [cm]",1000,-10.,10.,1000,-10.,10.);
 
 
-  TH2F *hphotonMap2 = new TH2F("Photon Map2","Photon Map2; x [Pads]; y [Pads]",1000,-25.,25.,1000,-25.,25.);
-  TH2F *signalMap = new TH2F("signalHitMap","signalHitMap",1000,0.,-30.,1000,0.,30.);
-  TH2F *noiseMap = new TH2F("noiseHitMap","noiseHitMap",1000,0.,-30.,1000,0.,30.);
+  TH2F *hphotonMap = new TH2F("Photon Map","Photon Map; x [cm]; y [cm]",1000,-10.,10.,1000,-10.,10.);
 
 
+
+
+  TH2F *hphotonMap2 = new TH2F("Photon Map2","Photon Map2; x [cm]; y [cm]",1000,-25.,25.,1000,-25.,25.);
+
+
+  TH2F *signalMap = new TH2F("signalHitMap","signalHitMap; x [cm]; y [cm]",1000,-10.,10.,1000,-10.,10.);
+  TH2F *noiseMap = new TH2F("noiseHitMap","noiseHitMap; x [cm]; y [cm]",1000,-10.,10.,1000,-10.,10.);
+
+
+ 
    
   float Deltax = (RadiatorWidth+QuartzWindowWidth+CH4GapWidth-EmissionLenght)*TMath::Tan(ThetaP)*TMath::Cos(PhiP);
   float Deltay = (RadiatorWidth+QuartzWindowWidth+CH4GapWidth-EmissionLenght)*TMath::Tan(ThetaP)*TMath::Sin(PhiP);
@@ -146,6 +148,8 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, double Hwidth
 	  
   float ThetaCherenkov[100000] = {0x0}, PhiCherenkov[100000] = {0x0}, DegPhiCherenkov[100000] = {0x0};
     
+
+  
   for(Int_t iEvt = 0; iEvt<NumberOfEvents; iEvt++){
     
     //Printf("event number = %i",iEvt);
@@ -158,6 +162,10 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, double Hwidth
     ThetaP = TMath::Pi()*DegThetaP/180;
     PhiP = TMath::Pi()*DegPhiP/180;  
      
+
+    const int numBackGround = 0.03*120*120;
+    NumberOfClusters = numBackGround;
+
     for(Int_t n1=0;n1<NumberOfClusters; n1++) {// clusters loop
       
     //  Printf("cluster = %i",n1);
@@ -171,7 +179,7 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, double Hwidth
 
       noiseMap->Fill(Xcen[n1], Ycen[n1]);
       hSignalAndNoiseMap->Fill(Xcen[n1], Ycen[n1]);
-            
+      hSignalAndNoiseMap2->Fill(Xcen[n1], Ycen[n1]);
 
 //      Xcen[n1] = 130*gRandom->Rndm(n1); Ycen[n1] = 130*gRandom->Rndm(n1); 
       
@@ -306,7 +314,7 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, double Hwidth
       
       hTheta->Fill(ThetaCherenkov[n1]);
 
-      // add Actual Cherenkov Photon to Candidates
+      // add background Photon to Candidates
       photonCandidates.emplace_back(ThetaCherenkov[n1]);
 	      	      
       //if(k1==2233) cout << " ThetaCherenkov " <<ThetaCherenkov[n1] <<"   PhiCherenkov = "<<DegPhiCherenkov[n1]<<"  event number = "<<k1<< endl;
@@ -367,58 +375,29 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, double Hwidth
  // endre weight til fra Recon fra Giacomo sin branch
 
  TF1 *fBackGround = new TF1("fBackGround",BackgroundFunc,0,0.75,1);
- 
- TCanvas *c1 = new TCanvas("c1","c1",800,800);
- TCanvas *c2 = new TCanvas("c2","c2",800,800);
- TCanvas *c3 = new TCanvas("c3","c3",800,800);
-
-
- TCanvas *photonCanvas = new TCanvas("Photon Hit Map","Photon Hit Map",800,800);
- TCanvas *photonCanvas2 = new TCanvas("Photon Hit Map2","Photon Hit Map2",800,800);
-
- TCanvas *clusterCanvas = new TCanvas("Cluster Hit Map","Cluster Hit Map",800,800);
- TCanvas *clusterCanvas2 = new TCanvas("Cluster Hit Map2","Cluster Hit Map2",800,800);
-
- photonCanvas->cd();
- hphotonMap->Draw();
-
-
- photonCanvas2->Divide(2,1);
- photonCanvas2->cd(1);
- hphotonMap->Draw();
-
- photonCanvas2->cd(2);
- hphotonMap2->Draw();
-
- clusterCanvas->cd();
- hClusterMap->Draw();
-
-
- clusterCanvas2->Divide(2,1);
- clusterCanvas2->cd(1);
- hClusterMap->Draw();
-
- clusterCanvas2->cd(2);
- hSignalAndNoiseMap->Draw();
-
- 
-
-
-
-//signalMap noiseMap hSignalAndNoiseMap
-
-
- TCanvas *c4 = new TCanvas("c4","c4",600,400);
- 
- c1->cd();
  hTheta->Fit(fBackGround,"RQ");
  hTheta->Draw();
+
+
+
+ 
+
  
  Printf("par0 = %f",fBackGround->GetParameter(0));
  
+
+
+ // rndm value in ranfe 0.4, 0.7?
+ const double ckovAngleMean = .4*(1+.75*gRandom->Rndm(1));
+ meanCherenkovAngle = ckovAngleMean;
+
+
+
  for(Int_t i=0; i < numberOfCkovPhotons; i++) {
    
-   double ckovAngle = gRandom->Gaus(0.5,0.012);		    // random CkovAngle
+
+   
+   double ckovAngle = gRandom->Gaus(ckovAngleMean, 0.012);		    // random CkovAngle
    double ringRadius = getRadiusFromCkov(ckovAngle); // R in photon-map
    Printf("Cherenkov Photon : Angle = %f Radius = %f", ckovAngle, ringRadius);	
 
@@ -431,7 +410,10 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, double Hwidth
 
    signalMap->Fill(x,y);//signalMap noiseMap hSignalAndNoiseMap
    hSignalAndNoiseMap->Fill(x,y);
+   hSignalAndNoiseMap2->Fill(x,y);
 
+
+ // hSignalAndNoiseMap, hSignalAndNoiseMap2 i s
 
    // add Actual Cherenkov Photon to Candidates
    photonCandidates.emplace_back(ckovAngle);
@@ -457,33 +439,48 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, double Hwidth
    hThetawg->Fill(ThetaCherenkov[n2],weight);
 
 
-   
-
-
  }
 
+	
+ Printf("Hough Window size = %f", Hwidth); 
+ auto ckovAnglePredicted = houghResponse(photonCandidates,  Hwidth);
+ 
  Printf("Total Number of photonCandidates = %zu", photonCandidates.size()); 
  Printf("Total Number of Background Clusters = %i", NumberOfClusters); 
- Printf("Hough Window size = %f", Hwidth); 
- houghResponse(photonCandidates,  Hwidth);
+ Printf("Number of  numberOfCkovPhotons = %i", numberOfCkovPhotons); 
+ Printf("Cherenkov Photon Mean Angle = %f " , ckovAngleMean);
+ Printf("Predicted Cherenkov Photon Angle = %f " , ckovAnglePredicted);
+ 
 
 
- TCanvas *signalCanvas = new TCanvas("SignalMap","SignalMap", 800, 800);
- signalCanvas->Divide(2,1);
- signalCanvas->cd(1);
- signalMap->Draw();
-
- TCanvas *noiseCanvas = new TCanvas("Noise Map","Noise Map", 800, 800);
- noiseCanvas->Divide(2,1);
- noiseCanvas->cd(1);
- noiseMap->Draw();
-
- TCanvas *signalNoiseCanvas = new TCanvas("Signal and Noise Map","Signal and Noise Map", 800, 800);
+ TCanvas *signalNoiseCanvas = new TCanvas("Signal and Noise Hit Map","Signal and Noise Hit Map",800,800);  
  signalNoiseCanvas->Divide(2,1);
  signalNoiseCanvas->cd(1);
+ signalMap->Draw();
+ signalNoiseCanvas->cd(2);
+ noiseMap->Draw();
+
+
+
+ TCanvas *signalPNoiseCanvas = new TCanvas("Signal+Noise Hit Map","Signal+Noise Hit Map",800,800);
+ signalPNoiseCanvas->Divide(2,1);
+ signalPNoiseCanvas->cd(1);
  hSignalAndNoiseMap->Draw();
 
+ signalPNoiseCanvas->cd(2);
+ hSignalAndNoiseMap2->Draw();
 
+
+
+
+
+ /*
+ TCanvas *c1 = new TCanvas("c1","c1",800,800);
+ TCanvas *c2 = new TCanvas("c2","c2",800,800);
+ TCanvas *c3 = new TCanvas("c3","c3",800,800);
+ TCanvas *c4 = new TCanvas("c4","c4",600,400);
+
+ c1->cd();
 
  c2->cd();
  hTheta2->Draw(); 
@@ -492,12 +489,15 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, double Hwidth
  hThetawg->Draw();
  
  c4->cd();
- NPhoton->Draw();
+ NPhoton->Draw(); */ 
 
  TCanvas* ringCanvas = new TCanvas("Ring Cherenkov", "Ring Cherenkov", 800,800);
  ringCanvas->cd();
  hThetaRing->Draw();
 
+
+
+ /*
   gStyle->SetOptStat("erm");
  {
    TCanvas* testCanvas = new TCanvas("test" ,"test", 800,800);
@@ -510,8 +510,33 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, double Hwidth
    auto pad2 = static_cast<TPad *>(testCanvas->cd(2));
    hphotonMap->Draw();
 
- }
+ } */ 
 
+
+/*
+ {
+
+    TCanvas *houghCanvas = new TCanvas("Hough Canvas","Hough Canvas", 800, 800);
+  houghCanvas->Divide(2,2);
+
+   houghCanvas->cd(1);
+   hTheta->Draw();
+
+   houghCanvas->cd(2);
+   phots->Draw();
+
+   houghCanvas->cd(3);
+   photsw->Draw();
+
+   houghCanvas->cd(4);
+   resultw->Draw();
+
+   houghCanvas->Show();
+   houghCanvas->SaveAs("houghCanvas.png");
+ }*/
+
+  
+ /*
  {
    TCanvas* testCanvas2 = new TCanvas("test2" ,"test2", 1600,800);
    testCanvas2->Divide(2,2);
@@ -545,7 +570,7 @@ void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, double Hwidth
    hThetawg_cl->SetLabelSize(hTheta_cl->GetLabelSize("x"), "xy");
    hThetawg_cl->SetTitle("d) (Weighted) Track Photon Cherenkov Angle Distribution;angle [rad]; counts/1 mrad");
    hThetawg_cl->Draw();
- }
+ } */
 
  
  TFile *outFile = TFile::Open("background.root","RECREATE");
@@ -595,6 +620,7 @@ double getRadiusFromCkov(double ckovAngle)
   double R_ckov = sin_ckov*(RadiatorWidth - EmissionLenght);
   double R_qz = sin_qz * QuartzWindowWidth;
   double R_0 = sin_theta0*CH4GapWidth;
+  //Printf("Radiuses  , R_ckov  % f + R_qz %f + R_0 %f", R_ckov, R_qz, R_0);
   double R = static_cast<double>(R_ckov + R_qz + R_0);
   return R;
 } 
@@ -606,16 +632,7 @@ double getRadiusFromCkov(double ckovAngle)
 double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandidates, double fWindowWidth)
 {
 
-  const double fDTheta = 0.001;  // increment
-  double kThetaMax = 0.75;
-  int nChannels = (int)(kThetaMax / fDTheta + 0.5);
 
-  // ef : change to smart-pointer
-
-  std::unique_ptr<TH1D> phots, photsw, resultw;
-  phots.reset(new TH1D("Rphot", "phots", nChannels, 0, kThetaMax));
-  photsw.reset(new TH1D("RphotWeighted", "photsw", nChannels, 0, kThetaMax));
-  resultw.reset(new TH1D("resultw", "resultw", nChannels, 0, kThetaMax));
 
   /* ef : changed from this:
   // TH1D *resultw = new TH1D("resultw","resultw"       ,nChannels,0,kThetaMax);
@@ -623,7 +640,12 @@ double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandida
   // TH1D *photsw  = new TH1D("RphotWeighted" ,"photsw" ,nChannels,0,kThetaMax); */
 
   int nBin = (int)(kThetaMax / fDTheta);
-  int nCorrBand = (int)(fWindowWidth / (2 * fDTheta));
+
+
+  // ef : nCorrBand w the previous setting led to the bin1 = 1 bin2 = 750
+  int nCorrBand = (int)(fWindowWidth / (2 /** fDTheta*/));
+
+  Printf("nBin %d nCorrBand %d", nBin, nCorrBand);
 
   for (const auto& angle : photonCandidates) { // photon cadidates loop
 
@@ -632,23 +654,27 @@ double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandida
 
 
     phots->Fill(angle);
-    Printf("HoughResponse Fill histogram phots : angle = %f", angle);
+
     int bin = (int)(0.5 + angle / (fDTheta));
     double weight = 1.;
     if (true) {
       double lowerlimit = ((double)bin) * fDTheta - 0.5 * fDTheta;
       double upperlimit = ((double)bin) * fDTheta + 0.5 * fDTheta;
 
-      double areaLow =  getRadiusFromCkov(lowerlimit);// calcRingGeom(lowerlimit, 2);
-      double areaHigh = getRadiusFromCkov(upperlimit);
+
+      double rLow = getRadiusFromCkov(lowerlimit);
+      double areaLow =  0.5*TMath::Pi()*TMath::Sq(rLow);// calcRingGeom(lowerlimit, 2);
+ 
+      double rHigh = getRadiusFromCkov(upperlimit);
+      double areaHigh =  0.5*TMath::Pi()*TMath::Sq(rHigh);// calcRingGeom(lowerlimit, 2);
+      //Printf("Areas : areaLow %f, areaHigh %f ", areaLow, areaHigh);
 
       double diffArea = areaHigh - areaLow;
       if (diffArea > 0)
         weight = 1. / diffArea;
     }
-    Printf("angle %f ; weight %f ", angle, weight);
+
     photsw->Fill(angle, weight);
-    Printf("HoughResponse Fill histogram photsw angle : %f weight : %f" , angle, weight);
     //fPhotWei.emplace_back(weight); ef: do i need this?
   } // photon candidates loop
 
@@ -661,25 +687,24 @@ double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandida
       bin2 = nBin;
     double sumPhots = phots->Integral(bin1, bin2);
 
-    Printf("bin1 %d ; bin2 %d; sumPhots %f ", bin1, bin2, sumPhots);
+    //Printf("bin1 %d ; bin2 %d; sumPhots %f ", bin1, bin2, sumPhots);
     if (sumPhots < 3)
       continue; // if less then 3 photons don't trust to this ring
     double sumPhotsw = photsw->Integral(bin1, bin2);
-    Printf("sumPhotsw %f  ",sumPhotsw);
     if ((double)((i + 0.5) * fDTheta) > 0.7)
       continue;
 
-    Printf("HoughResponse Fill histogram resultw bin %f sumPhotsw %f ", (double)((i + 0.5) * fDTheta),sumPhotsw);
+
+
+    
     resultw->Fill((double)((i + 0.5) * fDTheta), sumPhotsw);
   }
   // evaluate the "BEST" theta ckov as the maximum value of histogramm
 
-  // ef : get() method should not be used to create new pointers for raw-pointers from smart-pointers,
-  // does this apply to the GetArray-method too?
   double* pVec = resultw->GetArray();
   int locMax = TMath::LocMax(nBin, pVec);
 
-     Printf("photsw %f phots %d", *pVec, locMax);
+  Printf("pVec %f locMax %d", *pVec, locMax);
 //photsw
   Printf("Entries : resultw %f photsw %f phots %f", resultw->GetEntries(), photsw->GetEntries(), phots->GetEntries());
   Printf("Max resultw %f photsw %f phots %f",  resultw->GetMaximum(10000.), photsw->GetMaximum(10000.), phots->GetMaximum(10000.));
@@ -688,40 +713,63 @@ double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandida
   // ef: not this method, raw-pointers should not be used with new/delete-keywords
   //     smart-pointers are deleted when the fcuntion exits scope :
   // delete phots;delete photsw;delete resultw; // Reset and delete objects
-  
+  double ckovTrack = static_cast<double>(locMax * fDTheta + 0.5 * fDTheta); // final most probable track theta ckov
+
 
   TCanvas *houghCanvas = new TCanvas("Hough Canvas","Hough Canvas", 800, 800);
   houghCanvas->Divide(2,2);
+
   houghCanvas->cd(1);
-  phots->Draw();
+  hTheta->Draw();
 
   houghCanvas->cd(2);
-  photsw->Draw();
+  phots->Draw();
 
   houghCanvas->cd(3);
+  photsw->Draw();
+
+  auto pad4 = static_cast<TPad*>(houghCanvas->cd(4));
+  pad4->PaintText(.2, .9, Form("Track Cherenkov"));
+  pad4->PaintText(.2, .8, Form("Actual Value = %.3f", meanCherenkovAngle));
+  pad4->PaintText(.2, .7, Form("Predicted Value = %.3f", ckovTrack));
+  pad4->PaintTextNDC(.2, .9, Form("Track Cherenkov"));
+  pad4->PaintTextNDC(.2, .8, Form("Actual Value = %.3f", meanCherenkovAngle));
+  pad4->PaintTextNDC(.2, .7, Form("Predicted Value = %.3f", ckovTrack));
+  
+  gStyle->SetPaintTextFormat("1.3f");
   resultw->Draw();
+  TLatex lt;
+  lt.DrawLatexNDC(.15, .85, Form("Track Cherenkov #Theta_{c} :"));
+  lt.DrawLatexNDC(.16, .775, Form("Actual = %.3f", meanCherenkovAngle));
+  lt.DrawLatexNDC(.16, .7, Form("Predicted = %.3f", ckovTrack));
 
   houghCanvas->Show();
   houghCanvas->SaveAs("houghCanvas.png");
 
 
+  /*
   TCanvas *photsCanvas = new TCanvas("photss","photss", 800, 800);
   photsCanvas->cd(1);
   phots->Draw();
-  resultwCanvas->SaveAs("phots.png");
+  photsCanvas->SaveAs("phots.png");
 
   TCanvas *photswCanvas = new TCanvas("photsw","photsw", 800, 800);
   photswCanvas->cd(1);
   photsw->Draw();
-  resultwCanvas->SaveAs("photsw.png");
+  photswCanvas->SaveAs("photsw.png");
 
   TCanvas *resultwCanvas = new TCanvas("resultw","resultw", 800, 800);
   resultwCanvas->cd(1);
   resultw->Draw();
   resultwCanvas->SaveAs("resultw.png");
 
-  return static_cast<double>(locMax * fDTheta + 0.5 * fDTheta); // final most probable track theta ckov
-  // 
+
+  //  
+  */
+   
+  Printf("ckovTrack = %f", ckovTrack);
+  return ckovTrack;
+
 }
 
 
@@ -733,7 +781,7 @@ double calcRingGeom(double ckovAng, int level)
   // Arguments: ckovAng - cerenkov angle
   //            level   - precision in finding area and portion of ring accepted (multiple of 50)
   //   Returns: area of the ring in cm^2 for given theta ckov
-
+f
   int kN = 50 * level;
   int nPoints = 0;
   double area = 0;
@@ -887,4 +935,20 @@ const o2::math_utils::Vector2D<T> intWithEdge(o2::math_utils::Vector2D<T> p1, o2
     return pint;
   return p1;
 } // IntWithEdge()v */
+
+void setStyle()
+{
+  gStyle->SetOptStat("emr");
+  phots->SetTitleSize(phots->GetTitleSize("x")*1.4, "xy");
+  phots->SetLabelSize(phots->GetLabelSize("x")*1.4, "xy");
+
+  photsw->SetTitleSize(phots->GetTitleSize("x"), "xy");
+  photsw->SetLabelSize(phots->GetLabelSize("x"), "xy");
+
+  resultw->SetTitleSize(phots->GetTitleSize("x"), "xy");
+  resultw->SetLabelSize(phots->GetLabelSize("x"), "xy");
+
+  hTheta->SetTitleSize(phots->GetTitleSize("x"), "xy");
+  hTheta->SetLabelSize(phots->GetLabelSize("x"), "xy");
+}
 

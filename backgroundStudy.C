@@ -64,7 +64,9 @@ void setStyle();
 auto phots = new TH1D("Photon Candidates", "Photon Candidates;angle [rad]; counts/1 mrad", nChannels, 0, kThetaMax);
 auto photsw = new TH1D("Photon Weights", "Photon Weights;angle [rad]; counts/1 mrad", nChannels, 0, kThetaMax);
 auto resultw = new TH1D("Sliding Windows", "Sliding Window;angle [rad]; counts/1 mrad", nChannels, 0, kThetaMax);
-TH1F *hTheta     = new TH1F("Background","Background; angle [rad]; counts/1 mrad",750,0.,0.75); 
+TH1F *hTheta = new TH1F("Background","Background; angle [rad]; counts/1 mrad",750,0.,0.75); 
+
+TH1F *hThetaCh = new TH1F("Cherenkov Photons","Cherenkov Photons; angle [rad]; counts/1 mrad",750,0.,0.75); 
 
 double meanCherenkovAngle;
 
@@ -128,16 +130,11 @@ TH2F *hSignalAndNoiseMap2 = new TH2F("Signal and Noise 2", "Signal and Noise 2; 
 
   TH2F *hphotonMap = new TH2F("Photon Map","Photon Map; x [cm]; y [cm]",1000,-10.,10.,1000,-10.,10.);
 
-
-
-
   TH2F *hphotonMap2 = new TH2F("Photon Map2","Photon Map2; x [cm]; y [cm]",1000,-25.,25.,1000,-25.,25.);
 
 
-  TH2F *signalMap = new TH2F("signalHitMap","signalHitMap; x [cm]; y [cm]",1000,-10.,10.,1000,-10.,10.);
+  TH2F *signalMap = new TH2F("Hit Map","Hit Map; x [cm]; y [cm]",1000,-10.,10.,1000,-10.,10.);
   TH2F *noiseMap = new TH2F("noiseHitMap","noiseHitMap; x [cm]; y [cm]",1000,-10.,10.,1000,-10.,10.);
-
-
  
    
   float Deltax = (RadiatorWidth+QuartzWindowWidth+CH4GapWidth-EmissionLenght)*TMath::Tan(ThetaP)*TMath::Cos(PhiP);
@@ -375,8 +372,11 @@ TH2F *hSignalAndNoiseMap2 = new TH2F("Signal and Noise 2", "Signal and Noise 2; 
  // endre weight til fra Recon fra Giacomo sin branch
 
  TF1 *fBackGround = new TF1("fBackGround",BackgroundFunc,0,0.75,1);
+
+
+ auto hThetaClone = static_cast<TH1*>(hTheta->Clone());
  hTheta->Fit(fBackGround,"RQ");
- hTheta->Draw();
+ //hTheta->Draw();
 
 
 
@@ -388,7 +388,7 @@ TH2F *hSignalAndNoiseMap2 = new TH2F("Signal and Noise 2", "Signal and Noise 2; 
 
 
  // rndm value in ranfe 0.4, 0.7?
- const double ckovAngleMean = .4*(1+.75*gRandom->Rndm(1));
+ const double ckovAngleMean = .375*(1+.75*gRandom->Rndm(1));
  meanCherenkovAngle = ckovAngleMean;
 
 
@@ -398,6 +398,8 @@ TH2F *hSignalAndNoiseMap2 = new TH2F("Signal and Noise 2", "Signal and Noise 2; 
 
    
    double ckovAngle = gRandom->Gaus(ckovAngleMean, 0.012);		    // random CkovAngle
+   hThetaCh->Fill(ckovAngle);
+
    double ringRadius = getRadiusFromCkov(ckovAngle); // R in photon-map
    Printf("Cherenkov Photon : Angle = %f Radius = %f", ckovAngle, ringRadius);	
 
@@ -465,12 +467,30 @@ TH2F *hSignalAndNoiseMap2 = new TH2F("Signal and Noise 2", "Signal and Noise 2; 
  TCanvas *signalPNoiseCanvas = new TCanvas("Signal+Noise Hit Map","Signal+Noise Hit Map",800,800);
  signalPNoiseCanvas->Divide(2,1);
  signalPNoiseCanvas->cd(1);
- hSignalAndNoiseMap->Draw();
+ signalMap->SetMarkerStyle(3);
+ signalMap->SetMarkerColor(kBlue);
+ noiseMap->SetTitle("Cherenkov Photons");
+ signalMap->Draw();
 
- signalPNoiseCanvas->cd(2);
+ noiseMap->SetMarkerStyle(kBlack);
+ noiseMap->SetMarkerStyle(2);
+ noiseMap->Draw("SAME");
+ noiseMap->SetTitle("Background");
+ gPad->BuildLegend();
+
+ auto pad = static_cast<TPad*>(signalPNoiseCanvas->cd(2));
+ //hTheta2->SetLineColor(kRed);
+ hThetaCh->SetLineColor(kBlue);
+ hThetaCh->Draw(); 
+ hThetaClone->SetLineColor(kBlack);
+ hThetaClone->Draw("Same");
+
+ gPad->BuildLegend();
+/*
+ hSignalAndNoiseMap2->SetMarkerStyle(3);
  hSignalAndNoiseMap2->Draw();
 
-
+*/
 
 
 
@@ -646,7 +666,8 @@ double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandida
   int nCorrBand = (int)(fWindowWidth / (2 /** fDTheta*/));
 
   Printf("nBin %d nCorrBand %d", nBin, nCorrBand);
-
+  int binMax, sumMax = 0;
+  std::vector<double> okAngles;
   for (const auto& angle : photonCandidates) { // photon cadidates loop
 
     if (angle < 0 || angle > kThetaMax)
@@ -670,10 +691,11 @@ double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandida
       //Printf("Areas : areaLow %f, areaHigh %f ", areaLow, areaHigh);
 
       double diffArea = areaHigh - areaLow;
+      
       if (diffArea > 0)
         weight = 1. / diffArea;
     }
-
+    okAngles.emplace_back(angle);
     photsw->Fill(angle, weight);
     //fPhotWei.emplace_back(weight); ef: do i need this?
   } // photon candidates loop
@@ -687,24 +709,41 @@ double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandida
       bin2 = nBin;
     double sumPhots = phots->Integral(bin1, bin2);
 
-    //Printf("bin1 %d ; bin2 %d; sumPhots %f ", bin1, bin2, sumPhots);
+    /*Printf("bin1 %d ; bin2 %d; sumPhots %f ", bin1, bin2, sumPhots);
     if (sumPhots < 3)
-      continue; // if less then 3 photons don't trust to this ring
+      continue; // if less then 3 photons don't trust to this ring*/
     double sumPhotsw = photsw->Integral(bin1, bin2);
-    if ((double)((i + 0.5) * fDTheta) > 0.7)
+    if ((double)((i /*+ 0.5*/) * fDTheta) > 0.7)
       continue;
 
-
-
-    
-    resultw->Fill((double)((i + 0.5) * fDTheta), sumPhotsw);
+    if (sumPhotsw > sumMax){
+      binMax = i;
+      sumMax = sumPhotsw;
+      
+    }
+    resultw->Fill((double)((i /*+ 0.5*/) * fDTheta), sumPhotsw);
   }
   // evaluate the "BEST" theta ckov as the maximum value of histogramm
 
   double* pVec = resultw->GetArray();
   int locMax = TMath::LocMax(nBin, pVec);
 
+
+  double smtest = 0; int ent=0;
+
+  for(const auto& ok:okAngles){
+    if (TMath::Abs(ok*1000-locMax) > nCorrBand)
+      continue;     
+    smtest+=ok; ent++;	
+  }
+  auto avgTest = smtest/ent;
+  Printf("avgTest %f ent %d", avgTest, ent);
+  
+
+
+
   Printf("pVec %f locMax %d", *pVec, locMax);
+  Printf("sumMax %d, binMax %d", sumMax, binMax);
 //photsw
   Printf("Entries : resultw %f photsw %f phots %f", resultw->GetEntries(), photsw->GetEntries(), phots->GetEntries());
   Printf("Max resultw %f photsw %f phots %f",  resultw->GetMaximum(10000.), photsw->GetMaximum(10000.), phots->GetMaximum(10000.));
@@ -713,20 +752,72 @@ double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandida
   // ef: not this method, raw-pointers should not be used with new/delete-keywords
   //     smart-pointers are deleted when the fcuntion exits scope :
   // delete phots;delete photsw;delete resultw; // Reset and delete objects
+
+  
   double ckovTrack = static_cast<double>(locMax * fDTheta + 0.5 * fDTheta); // final most probable track theta ckov
 
+
+  double sumCkov = 0.;
+  int entries = 0;
+  double ckovSliding = phots->Integral(locMax-nCorrBand, locMax+nCorrBand);
+
+  //binMax
+  //locMax
+  for(int i = locMax-nCorrBand; i < locMax+nCorrBand; i++)
+  {
+
+     auto val = phots->GetBinContent(i);
+     auto w = photsw->GetBinContent(i);
+     //Printf("Ckov Photons : Bin %d, Value %f; Weight %f", i, val,w);
+
+     if(val > 0.){
+       sumCkov += fDTheta*i;//+0.5*fDTheta;
+       entries++;
+     }
+  }
+
+  const double avgCkov = sumCkov/static_cast<double>(entries);
+  ckovTrack = avgCkov;
+  Printf("Avg Ckov = %f", avgCkov);
+
+  Printf("sumCkov = %f || ckovSliding = %f", sumCkov,ckovSliding);
 
   TCanvas *houghCanvas = new TCanvas("Hough Canvas","Hough Canvas", 800, 800);
   houghCanvas->Divide(2,2);
 
   houghCanvas->cd(1);
+
   hTheta->Draw();
 
   houghCanvas->cd(2);
   phots->Draw();
+  TLatex lt2;
+  lt2.DrawLatexNDC(.15, .85, Form("Window #eta_{c} :"));
+  lt2.DrawLatexNDC(.16, .775, Form("Width = %.0f [mRad]", fWindowWidth));
+  lt2.DrawLatexNDC(.16, .7, Form("Entries = %d", entries));
+
+
+
+  Printf("TBox Max %f ", photsw->GetBinContent(phots->GetMaximumBin()));
+  Printf("TBox MaxBin %f ", phots->GetMaximumBin());
+
+
+  int binBox = phots->GetYaxis()->GetLast();
+  int yMax = phots->GetYaxis()->GetXmax();
+  Printf("TBox binY %d ", binBox);
+    Printf("TBox maxY %d ", yMax);
+
+  TBox* box = new TBox(ckovTrack-nCorrBand*0.001,0.,ckovTrack+nCorrBand*0.001,phots->GetBinContent(photsw->GetMaximumBin()));
+  box->SetLineColor(kRed);
+  box->SetFillStyle(0);  
+  box->SetLineWidth(2);  
+  box->Draw();
 
   houghCanvas->cd(3);
   photsw->Draw();
+
+
+
 
   auto pad4 = static_cast<TPad*>(houghCanvas->cd(4));
   pad4->PaintText(.2, .9, Form("Track Cherenkov"));
@@ -738,6 +829,21 @@ double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandida
   
   gStyle->SetPaintTextFormat("1.3f");
   resultw->Draw();
+
+
+  TLine* l = new TLine(ckovTrack, 0, ckovTrack, resultw->GetBinContent(locMax)*2);
+
+  //TLine* l = new TLine(resultw->GetMaximumBin(), 0., resultw->GetMaximumBin(), resultw->GetBinContent(resultw->GetMaximumBin()));
+  l->SetLineColor(kRed);
+  l->SetLineWidth(2);  
+  l->Draw();
+
+
+
+
+  //TLine* l = new TLine(ckovTrack-0.012, ckovTrack+0.012, 0.1, resultw->GetMaximum(10.));
+
+  //0, kThetaMax
   TLatex lt;
   lt.DrawLatexNDC(.15, .85, Form("Track Cherenkov #Theta_{c} :"));
   lt.DrawLatexNDC(.16, .775, Form("Actual = %.3f", meanCherenkovAngle));

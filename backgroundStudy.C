@@ -37,14 +37,15 @@
 #include "Math/GenVector/RotationZ.h"
 
 
-
+double arrW[750]= {0.};
 
 
 using namespace o2;
 using namespace o2::hmpid;
 
 #include <HMPIDBase/Param.h>
-
+void setStyleInd(TH2* th1f, double ratio = 1.2);
+void setStyleInd(TH1* th1f, double ratio = 1.2);
 
 // get Ring-radius from Cherenkov-angle
 double getRadiusFromCkov(double ckovAngle);
@@ -63,7 +64,7 @@ void setStyle();
 
 auto phots = new TH1D("Photon Candidates", "Photon Candidates;angle [rad]; counts/1 mrad", nChannels, 0, kThetaMax);
 auto photsw = new TH1D("Photon Weights", "Photon Weights;angle [rad]; counts/1 mrad", nChannels, 0, kThetaMax);
-auto resultw = new TH1D("Sliding Windows", "Sliding Window;angle [rad]; counts/1 mrad", nChannels, 0, kThetaMax);
+auto resultw = new TH1D("Sum of Weights in Window at Bin", "Sum of Weights in Window at bin;angle [rad]; counts/1 mrad", nChannels, 0, kThetaMax);
 TH1F *hTheta = new TH1F("Background","Background; angle [rad]; counts/1 mrad",750,0.,0.75); 
 
 TH1F *hThetaCh = new TH1F("Cherenkov Photons","Cherenkov Photons; angle [rad]; counts/1 mrad",750,0.,0.75); 
@@ -73,6 +74,7 @@ double meanCherenkovAngle;
 
 std::vector<double> photonCandidates;
 
+double ckovTrackOut = 0;
 double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandidates, double fWindowWidth);
 
 
@@ -89,13 +91,19 @@ const double CH4GapWidth = 8;
 const double  RadiatorWidth = 1.;
 const double  QuartzWindowWidth = 0.5;
 const double  EmissionLenght = RadiatorWidth/2;
-  
 
-void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, double Hwidth)   
+
+TH1* getMaxInRange(TH1* th1, double& up, double mid, double width);
+double getMaxInRange(TH1* th1, int start, int width);
+double getMaxInRange(TH1* th1, double mid, double width);
+
+
+
+void backgroundStudy(Int_t NumberOfEvents, Int_t NumberOfClusters, double Hwidth, double occupancy = 0.03)   
 {
-
+    gStyle->SetOptStat("ei");
   const auto numberOfCkovPhotons = /*gRandom->Poisson*/(11);
-
+  photonCandidates.clear();
   double ThetaP=0,PhiP=0,PhiF=0,DegThetaP=0,DegPhiP=0;
   //float /*RadiatorWidth,*/ QuartzWindowWidth,CH4GapWidth,EmissionLenght;
   float FreonIndexOfRefraction,QuartzIndexOfRefraction,CH4IndexOfRefraction;
@@ -133,8 +141,8 @@ TH2F *hSignalAndNoiseMap2 = new TH2F("Signal and Noise 2", "Signal and Noise 2; 
   TH2F *hphotonMap2 = new TH2F("Photon Map2","Photon Map2; x [cm]; y [cm]",1000,-25.,25.,1000,-25.,25.);
 
 
-  TH2F *signalMap = new TH2F("Hit Map","Hit Map; x [cm]; y [cm]",1000,-10.,10.,1000,-10.,10.);
-  TH2F *noiseMap = new TH2F("noiseHitMap","noiseHitMap; x [cm]; y [cm]",1000,-10.,10.,1000,-10.,10.);
+  TH2F *signalMap = new TH2F("Hit Map","Hit Map; x [cm]; y [cm]",1000,-7.,7.,1000,-7.,8.);
+  TH2F *noiseMap = new TH2F("noiseHitMap","noiseHitMap; x [cm]; y [cm]",1000,-7.,7.,1000,-7.,8.);
  
    
   float Deltax = (RadiatorWidth+QuartzWindowWidth+CH4GapWidth-EmissionLenght)*TMath::Tan(ThetaP)*TMath::Cos(PhiP);
@@ -154,13 +162,14 @@ TH2F *hSignalAndNoiseMap2 = new TH2F("Signal and Noise 2", "Signal and Noise 2; 
     float Xcen[100000],Ycen[100000];
      
     DegThetaP = 4.;//0.*(1 - 2*gRandom->Rndm(iEvt));
+    gRandom->SetSeed(0);
     DegPhiP   = 360*gRandom->Rndm(iEvt);
         
     ThetaP = TMath::Pi()*DegThetaP/180;
     PhiP = TMath::Pi()*DegPhiP/180;  
      
 
-    const int numBackGround = 0.03*120*120;
+    const int numBackGround = occupancy*120*120; //occupancy = 0.03
     NumberOfClusters = numBackGround;
 
     for(Int_t n1=0;n1<NumberOfClusters; n1++) {// clusters loop
@@ -310,7 +319,7 @@ TH2F *hSignalAndNoiseMap2 = new TH2F("Signal and Noise 2", "Signal and Noise 2; 
       //float DegPhi = 180*Phi/TMath::Pi(); 
       
       hTheta->Fill(ThetaCherenkov[n1]);
-
+noiseMap
       // add background Photon to Candidates
       photonCandidates.emplace_back(ThetaCherenkov[n1]);
 	      	      
@@ -388,17 +397,50 @@ TH2F *hSignalAndNoiseMap2 = new TH2F("Signal and Noise 2", "Signal and Noise 2; 
 
 
  // rndm value in ranfe 0.4, 0.7?
- const double ckovAngleMean = .375*(1+.75*gRandom->Rndm(1));
- meanCherenkovAngle = ckovAngleMean;
+ TRandom2* rnd = new TRandom2(1);
+ rnd->SetSeed(0);
+ for(int i = 0; i < 10; i++)
+ {
+	 auto n = rnd->Gaus(0.5, 0.25);
+	 Printf("Gauss%d n %f", i, n);
+ }
 
+ for(int i = 0; i < 10; i++)
+ {
+	 auto n = rnd->Gaus(0.5, 0.25);
+	 Printf("Gauss%d n %f", i,n);
+ }
+
+
+ for(int i = 0; i < 10; i++)
+ {
+
+	 auto n = rnd->Rndm(1);
+	 Printf("Rndm n %f", n);
+ }
+
+ for(int i = 0; i < 10; i++)
+ {
+
+	 auto n = rnd->Rndm(1);
+	 Printf("Rndm n %f", n);
+ }
+ const double ckovAngleMean = 0.4+0.25*rnd->Gaus(0.5, 0.25);
+ meanCherenkovAngle = ckovAngleMean;
+ Printf("ckovAngleMean Generated %f", ckovAngleMean);
 
 
  for(Int_t i=0; i < numberOfCkovPhotons; i++) {
    
 
    
-   double ckovAngle = gRandom->Gaus(ckovAngleMean, 0.012);		    // random CkovAngle
-   hThetaCh->Fill(ckovAngle);
+   double ckovAngle = rnd->Gaus(ckovAngleMean, 0.012);		    // random CkovAngle
+   
+
+
+  hThetaCh->Fill(ckovAngle);
+
+
 
    double ringRadius = getRadiusFromCkov(ckovAngle); // R in photon-map
    Printf("Cherenkov Photon : Angle = %f Radius = %f", ckovAngle, ringRadius);	
@@ -444,7 +486,8 @@ TH2F *hSignalAndNoiseMap2 = new TH2F("Signal and Noise 2", "Signal and Noise 2; 
  }
 
 	
- Printf("Hough Window size = %f", Hwidth); 
+ Printf("Hough Window size = %f", Hwidth);
+ 
  auto ckovAnglePredicted = houghResponse(photonCandidates,  Hwidth);
  
  Printf("Total Number of photonCandidates = %zu", photonCandidates.size()); 
@@ -467,25 +510,104 @@ TH2F *hSignalAndNoiseMap2 = new TH2F("Signal and Noise 2", "Signal and Noise 2; 
  TCanvas *signalPNoiseCanvas = new TCanvas("Signal+Noise Hit Map","Signal+Noise Hit Map",800,800);
  signalPNoiseCanvas->Divide(2,1);
  signalPNoiseCanvas->cd(1);
- signalMap->SetMarkerStyle(3);
- signalMap->SetMarkerColor(kBlue);
- noiseMap->SetTitle("Cherenkov Photons");
- signalMap->Draw();
-
+ setStyleInd(noiseMap);
  noiseMap->SetMarkerStyle(kBlack);
  noiseMap->SetMarkerStyle(2);
- noiseMap->Draw("SAME");
- noiseMap->SetTitle("Background");
- gPad->BuildLegend();
+ noiseMap->SetMarkerColor(kRed);
+ noiseMap->SetTitle(Form("Photon  Hit Map"));
 
+
+ signalMap->SetMarkerStyle(3);
+ signalMap->SetMarkerColor(kBlue);
+
+
+
+ for(double d = 0.1; d < 0.4; d+= 0.05){
+   double rmin = getRadiusFromCkov(d+0.001*Hwidth/2); // R in photon-map
+   double rmax = getRadiusFromCkov(d-0.001*Hwidth/2); // R in photon-map
+   Printf("d%f Rmin%f, Rmax%f", d, rmin, rmax);
+ }
+
+
+
+ double rMax = getRadiusFromCkov(ckovTrackOut+0.001*Hwidth/2); // R in photon-map
+ double rMin = getRadiusFromCkov(ckovTrackOut-0.001*Hwidth/2); // R in photon-map
+ TEllipse* telMin = new TEllipse(0., 0., rMin);
+ TEllipse* telMax = new TEllipse(0., 0., rMax);
+
+ TArc* arcMin = new TArc(0., 0., rMin);
+ TArc* arcMax = new TArc(0., 0., rMax);
+
+ telMin->SetLineColor(kGreen); telMax->SetLineColor(kGreen);
+ 
+
+ telMin->SetFillStyle(0);telMax->SetFillStyle(0);
+ telMin->SetLineWidth(2);telMax->SetLineWidth(2);
+
+
+  auto up1 = getMaxInRange(hThetaClone, ckovTrackOut, Hwidth);
+  auto up2 = getMaxInRange(hThetaCh, ckovTrackOut, Hwidth);
+  auto up = std::max(up1, up2);
+
+ TBox* box2 = new TBox(ckovTrackOut-(Hwidth/2)*0.001,0.,ckovTrackOut+(Hwidth/2)*0.001,up);
+ box2->SetLineColor(kGreen);
+ box2->SetFillStyle(0);  
+ box2->SetLineWidth(2);  
+  
+
+
+
+ noiseMap->GetXaxis()->SetRangeUser(-7, 7);
+ noiseMap->GetYaxis()->SetRangeUser(-7, 8); 
+
+ signalMap->GetXaxis()->SetRangeUser(-7, 7);
+ signalMap->GetYaxis()->SetRangeUser(-7, 8);
+
+ TLatex lt3;
+
+ //lt3.DrawLatexNDC(.25, .8, Form("Background"));
+
+ noiseMap->Draw();
+ signalMap->Draw("Same"); 
+ //lt3.DrawLatexNDC(.15, .85, Form("#color[4]{Cherenkov} Background"));
+ lt3.DrawLatexNDC(.15, .85, Form("#color[4]{Cherenkov}"));
+ lt3.DrawLatexNDC(.15, .8, Form("#color[2]{Background}"));
+
+
+
+
+ telMin->Draw(); 
+ telMax->Draw(); 
  auto pad = static_cast<TPad*>(signalPNoiseCanvas->cd(2));
  //hTheta2->SetLineColor(kRed);
+ hThetaClone->SetLineColor(kRed);//hThetaCh
+ 
  hThetaCh->SetLineColor(kBlue);
- hThetaCh->Draw(); 
- hThetaClone->SetLineColor(kBlack);
- hThetaClone->Draw("Same");
+ hThetaCh->SetTitle("Cherenkov Photons And Background");
+ hThetaCh->Draw();
 
- gPad->BuildLegend();
+ hThetaClone->Draw("Same");
+ hThetaClone->SetTitle("Histogram");
+ hThetaClone->GetXaxis()->SetRangeUser(0, 0.65);
+
+
+
+  TLine* l = new TLine(ckovTrackOut-(Hwidth/2)*0.001, 0, ckovTrackOut-(Hwidth/2)*0.001, up);
+
+  TLine* l2 = new TLine(ckovTrackOut+(Hwidth/2)*0.001, 0, ckovTrackOut+(Hwidth/2)*0.001, up);
+  TLine* ll = new TLine(ckovTrackOut-(Hwidth/2)*0.001,  up, ckovTrackOut+(Hwidth/2)*0.001, up);
+  l->SetLineColor(kGreen);  l2->SetLineColor(kGreen);ll->SetLineColor(kGreen);
+  l->SetLineWidth(2);    l2->SetLineWidth(2);  ll->SetLineWidth(2); 
+
+ l->Draw();  l2->Draw();ll->Draw();
+
+ //box2->Draw();
+ //lt2.DrawLatexNDC(.15, .85, Form("#color[4]{Cherenkov Photon}"));
+ //lt2.DrawLatexNDC(.15, .8, Form("Background Photon"));
+ signalPNoiseCanvas->Show();
+
+
+
 /*
  hSignalAndNoiseMap2->SetMarkerStyle(3);
  hSignalAndNoiseMap2->Draw();
@@ -516,7 +638,7 @@ TH2F *hSignalAndNoiseMap2 = new TH2F("Signal and Noise 2", "Signal and Noise 2; 
  hThetaRing->Draw();
 
 
-
+  gStyle->SetOptStat("ei");
  /*
   gStyle->SetOptStat("erm");
  {
@@ -668,6 +790,7 @@ double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandida
   Printf("nBin %d nCorrBand %d", nBin, nCorrBand);
   int binMax, sumMax = 0;
   std::vector<double> okAngles;
+  okAngles.clear();
   for (const auto& angle : photonCandidates) { // photon cadidates loop
 
     if (angle < 0 || angle > kThetaMax)
@@ -697,6 +820,9 @@ double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandida
     }
     okAngles.emplace_back(angle);
     photsw->Fill(angle, weight);
+
+    int nnn = static_cast<int>(angle*1000);
+    arrW[nnn] += weight;
     //fPhotWei.emplace_back(weight); ef: do i need this?
   } // photon candidates loop
 
@@ -755,6 +881,7 @@ double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandida
 
   
   double ckovTrack = static_cast<double>(locMax * fDTheta + 0.5 * fDTheta); // final most probable track theta ckov
+  ckovTrackOut = ckovTrack;
 
 
   double sumCkov = 0.;
@@ -786,16 +913,25 @@ double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandida
   houghCanvas->Divide(2,2);
 
   houghCanvas->cd(1);
-
-  hTheta->Draw();
+  auto hThetaCl2 = static_cast<TH1*>(hTheta->Clone());
+  setStyleInd(hThetaCl2);
+  hThetaCl2->Draw();
 
   houghCanvas->cd(2);
+  setStyleInd(phots);
   phots->Draw();
   TLatex lt2;
   lt2.DrawLatexNDC(.15, .85, Form("Window #eta_{c} :"));
   lt2.DrawLatexNDC(.16, .775, Form("Width = %.0f [mRad]", fWindowWidth));
   lt2.DrawLatexNDC(.16, .7, Form("Entries = %d", entries));
 
+  auto up = getMaxInRange(phots, ckovTrack, fWindowWidth);
+  TLine* l3 = new TLine(ckovTrack-(fWindowWidth/2)*0.001, 0, ckovTrack-(fWindowWidth/2)*0.001, up);
+  TLine* l4 = new TLine(ckovTrack+(fWindowWidth/2)*0.001, 0, ckovTrack+(fWindowWidth/2)*0.001, up);
+  TLine* l5 = new TLine(ckovTrack-(fWindowWidth/2)*0.001,up, ckovTrack+(fWindowWidth/2)*0.001, up);
+  l3->SetLineColor(kGreen);  l4->SetLineColor(kGreen);l5->SetLineColor(kGreen);
+  l3->SetLineWidth(2);    l4->SetLineWidth(2);l5->SetLineWidth(2);
+  l3->Draw();  l4->Draw();l5->Draw();
 
 
   Printf("TBox Max %f ", photsw->GetBinContent(phots->GetMaximumBin()));
@@ -807,15 +943,25 @@ double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandida
   Printf("TBox binY %d ", binBox);
     Printf("TBox maxY %d ", yMax);
 
-  TBox* box = new TBox(ckovTrack-nCorrBand*0.001,0.,ckovTrack+nCorrBand*0.001,phots->GetBinContent(photsw->GetMaximumBin()));
-  box->SetLineColor(kRed);
+  TBox* box = new TBox(/*ckovTrack*/ckovTrack-nCorrBand*0.001,0.,/*ckovTrack*/ckovTrack+nCorrBand*0.001,phots->GetBinContent(ckovTrack*1000/*photsw->GetMaximumBin()*/));
+  box->SetLineColor(kGreen);
   box->SetFillStyle(0);  
   box->SetLineWidth(2);  
-  box->Draw();
+
 
   houghCanvas->cd(3);
-  photsw->Draw();
+  setStyleInd(photsw);
+  double up_ = 0;
+  auto th = getMaxInRange(photsw, up_, ckovTrack, fWindowWidth);
+  th->Draw();
 
+
+
+
+  auto l3c = static_cast<TLine*>(l3->Clone());  auto l4c = static_cast<TLine*>(l4->Clone());  auto l5c = static_cast<TLine*>(l5->Clone());
+  l5c->SetY1(up_);
+  l3c->SetY2(up_); l4c->SetY2(up_);l5c->SetY2(up_);
+  l3c->Draw();  l4c->Draw();l5c->Draw();
 
 
 
@@ -828,13 +974,14 @@ double /*std::array<TH1D*, 3>*/ houghResponse(std::vector<double>& photonCandida
   pad4->PaintTextNDC(.2, .7, Form("Predicted Value = %.3f", ckovTrack));
   
   gStyle->SetPaintTextFormat("1.3f");
+  setStyleInd(resultw);
   resultw->Draw();
 
 
-  TLine* l = new TLine(ckovTrack, 0, ckovTrack, resultw->GetBinContent(locMax)*2);
+  TLine* l = new TLine(/*ckovTrack*/ckovTrack, 0, /*ckovTrack*/ckovTrack, resultw->GetBinContent(locMax)*2);
 
   //TLine* l = new TLine(resultw->GetMaximumBin(), 0., resultw->GetMaximumBin(), resultw->GetBinContent(resultw->GetMaximumBin()));
-  l->SetLineColor(kRed);
+  l->SetLineColor(kGreen);
   l->SetLineWidth(2);  
   l->Draw();
 
@@ -1042,11 +1189,92 @@ const o2::math_utils::Vector2D<T> intWithEdge(o2::math_utils::Vector2D<T> p1, o2
   return p1;
 } // IntWithEdge()v */
 
+void setStyleInd(TH1* th1f, double ratio = 1.2)
+{
+  th1f->SetTitleSize((th1f->GetTitleSize("x")*ratio), "xy");
+  th1f->SetLabelSize((th1f->GetLabelSize("x")*ratio), "xy");
+}
+
+
+/*
+void setPad(TPad*, double l, double, r, double t, double b)
+{
+  th1f->SetPadMaring((th1f->GetTitleSize("x")*ratio), "xy");
+}*/
+
+
+void setStyleInd(TH2* th1f, double ratio)
+{
+  th1f->SetTitleSize((th1f->GetTitleSize("x")*ratio), "xy");
+  th1f->SetLabelSize((th1f->GetLabelSize("x")*ratio), "xy");
+}
+
+
+
+double getMaxInRange(TH1* th1, double mid, double width)
+{
+
+
+  //Printf("mid %f || width %f ", mid, width);
+  double max = 1.0;
+
+  const int startBin = static_cast<int>(mid*1000);
+  const int nBin2 = static_cast<int>(width/2);
+  //Printf("startBin %d || endBin %d ", startBin-nBin2, startBin+nBin2);
+
+
+  int start = static_cast<int>(startBin-nBin2);
+  int end = static_cast<int>(startBin+nBin2);
+  for(int i = start; i < end; i++){
+    auto binEnt = th1->GetBinContent(i);
+    if (binEnt > max) max = binEnt;
+    Printf("ent i %d || val %f ", i, binEnt);
+  }
+  return max;
+}
+
+
+
+
+TH1* getMaxInRange(TH1* th1, double& up, double mid, double width)
+{
+  TH1* thOut = static_cast<TH1*>(th1);
+
+  //Printf("mid %f || width %f ", mid, width);
+  double max = 1.0;
+
+  const int startBin = static_cast<int>(mid*1000);
+  const int nBin2 = static_cast<int>(width/2);
+  //Printf("startBin %d || endBin %d ", startBin-nBin2, startBin+nBin2);
+
+
+  int start = static_cast<int>(startBin-nBin2);
+  int end = static_cast<int>(startBin+nBin2);
+
+  double r = 0;
+  for(const auto& i : arrW){
+    if (i > r) 
+      r = i;
+  }
+  
+  for(int i = start; i < end; i++){
+    auto binEnt = th1->GetBinContent(i);
+    auto binent = arrW[i-1];
+    thOut->SetBinContent(binent, i);
+    if (binEnt > max) max = binent;
+    Printf("ent i %d || val %f || val2 %f", i, binEnt, binent);
+
+  }
+  thOut->GetXaxis()->SetRangeUser(0., r);
+  up = max;
+  return thOut;
+}
+
 void setStyle()
 {
-  gStyle->SetOptStat("emr");
-  phots->SetTitleSize(phots->GetTitleSize("x")*1.4, "xy");
-  phots->SetLabelSize(phots->GetLabelSize("x")*1.4, "xy");
+  gStyle->SetOptStat("ei");
+  phots->SetTitleSize(phots->GetTitleSize("x")*1.3, "xy");
+  phots->SetLabelSize(phots->GetLabelSize("x")*1.3, "xy");
 
   photsw->SetTitleSize(phots->GetTitleSize("x"), "xy");
   photsw->SetLabelSize(phots->GetLabelSize("x"), "xy");
